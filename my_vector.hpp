@@ -330,7 +330,51 @@ vector<T, Allocator>::operator=(std::initializer_list<value_type> ilist)
 template <typename T, class Allocator>
 void vector<T, Allocator>::assign(size_type count, const_reference value)
 {
-    // TODO
+    clear();
+
+    if (count > capacity_) {
+        __alloc_traits::deallocate(allocator_, data, capacity_);
+        data = __alloc_traits::allocate(allocator_, count);
+        capacity_ = count;
+    }
+
+    for (; size_ < count; ++size_)
+        __alloc_traits::construct(allocator_, begin() + size_, value);
+
+}
+
+template <typename T, class Allocator>
+template <class InputIt, class Enable>
+void vector<T, Allocator>::assign(InputIt first, InputIt last)
+{
+    clear();
+
+    const difference_type numOfElems = std::distance(first, last);
+
+    if (numOfElems > capacity_) {
+        __alloc_traits::deallocate(allocator_, data, capacity_);
+        data = __alloc_traits::allocate(allocator_, numOfElems);
+        capacity_ = numOfElems;
+    }
+
+    for (; first != last; ++first, ++size_)
+        std::allocator_traits<allocator_type>::construct(allocator_, data + size_, *first);
+}
+
+template <typename T, class Allocator>
+void vector<T, Allocator>::assign(std::initializer_list<value_type> ilist)
+{
+    clear();
+
+    if (ilist.size() > capacity_) {
+        __alloc_traits::deallocate(allocator_, data, capacity_);
+        data = __alloc_traits::allocate(allocator_, ilist.size());
+        capacity_ = ilist.size();
+    }
+
+    size_ = ilist.size();
+    for (const auto &i : ilist)
+        std::allocator_traits<allocator_type>::construct(allocator_, data + size_, i);
 }
 
 /*** Element access ***/
