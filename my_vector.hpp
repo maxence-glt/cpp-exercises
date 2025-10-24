@@ -1,5 +1,4 @@
 #include <bits/stdc++.h>
-#include <iterator>
 #include <memory>
 
 namespace My {
@@ -7,20 +6,32 @@ namespace My {
 /*
  * My (custom) implementation of C++'s vector
  * https://en.cppreference.com/w/cpp/container/vector.html
+ * NOTE: I mostly ignore exception handling, sorry I don't 
+ *       want this to be an extra 2000 lines
  */
 
 template <typename T, class Allocator = std::allocator<T>>
 class vector {
 public:
     /*** C++ Standard Named Requirements for Containers***/
-    using value_type      = T;
-    using reference       = T&;
-    using const_reference = const T&;
-    using iterator        = T*;
-    using const_iterator  = const T*;
-    using difference_type = std::ptrdiff_t;
-    using size_type       = std::size_t;
     using allocator_type  = Allocator;
+    using __alloc_traits  = std::allocator_traits<Allocator>;
+    using size_type       = typename __alloc_traits::size_type;
+
+    using value_type      = T;
+    using reference       = value_type&;
+    using const_reference = const value_type&;
+
+    using difference_type = typename __alloc_traits::difference_type;
+    using pointer         = typename __alloc_traits::pointer;
+    using const_pointer   = typename __alloc_traits::const_pointer;
+    using iterator        = pointer;
+    using const_iterator  = const_pointer;
+
+    static_assert((std::is_same<typename allocator_type::value_type, value_type>::value),
+                  "Allocator::value_type must be same type as value_type");
+
+
 
     /*** Constructors and Destructors***/
     // Default constructors
@@ -54,7 +65,13 @@ public:
     /*** Assignment operators ***/
     vector &operator=(const vector &other);
     vector &operator=(vector &&other);
+    vector &operator=(std::initializer_list<value_type> ilist);
+
     void assign(size_type count, const_reference value);
+    template <class InputIt,
+              class Enable = typename std::enable_if<!std::is_integral<InputIt>::value>::type>
+    void assign(InputIt first, InputIt last);
+    void assign(std::initializer_list<value_type> ilist);
 
     /*** Element access ***/
     reference at(size_type pos);
@@ -92,7 +109,7 @@ public:
 
 
 private:
-    value_type*    data;
+    pointer        data;
     size_type      capacity_;
     size_type      size_;
     allocator_type allocator_;
@@ -105,19 +122,17 @@ private:
     }
 
     void grow(size_type newCap) {
-        auto temp = std::allocator_traits<allocator_type>::allocate(allocator_, newCap);
+        auto temp = __alloc_traits::allocate(allocator_, newCap);
 
         int i = 0;
         auto from = begin(), to = end();
+
         for (; from != to && i < newCap; ++from, ++i) {
-            std::allocator_traits<allocator_type>::construct(allocator_, 
-                                                             temp + i, 
-                                                             *from);
-            std::allocator_traits<allocator_type>::destroy(allocator_,
-                                                           from);
+            __alloc_traits::construct(allocator_, temp + i, *from);
+            __alloc_traits::destroy(allocator_, from);
         }
 
-        std::allocator_traits<allocator_type>::deallocate(allocator_, data, capacity_);
+        __alloc_traits::deallocate(allocator_, data, capacity_);
 
         data = temp;
         capacity_ = newCap;
@@ -145,18 +160,18 @@ vector<T, Allocator>::vector(size_type count,
 : data(nullptr), capacity_(count), size_(0), allocator_(alloc)
 {
     try {
-        data = std::allocator_traits<allocator_type>::allocate(allocator_, capacity_);
+        data = __alloc_traits::allocate(allocator_, capacity_);
 
         for (; size_ < count; ++size_)
-            std::allocator_traits<allocator_type>::construct(allocator_, data + size_);
+            __alloc_traits::construct(allocator_, data + size_);
     } catch (...) {
         auto from = begin();
         auto to   = end();
 
         for(; from != to; ++from)
-            std::allocator_traits<allocator_type>::destroy(allocator_, from);
+            __alloc_traits::destroy(allocator_, from);
 
-        std::allocator_traits<allocator_type>::deallocate(allocator_, data, capacity_);
+        __alloc_traits::deallocate(allocator_, data, capacity_);
 
         throw;
     }
@@ -302,6 +317,17 @@ vector<T, Allocator>& vector<T, Allocator>::operator=(vector &&other)
 
 
 template <typename T, class Allocator>
+vector<T, Allocator>&
+vector<T, Allocator>::operator=(std::initializer_list<value_type> ilist)
+{
+    vector temp(ilist);
+    swap(*this, temp);
+
+    return *this;
+}
+
+
+template <typename T, class Allocator>
 void vector<T, Allocator>::assign(size_type count, const_reference value)
 {
     // TODO
@@ -336,7 +362,8 @@ void vector<T, Allocator>::clear()
 }
 
 template <typename T, class Allocator>
-T* vector<T, Allocator>::insert(const_iterator pos, const_reference value)
+typename vector<T, Allocator>::iterator 
+vector<T, Allocator>::insert(const_iterator pos, const_reference value)
 {
     using traits = std::allocator_traits<allocator_type>;
     size_type idx = pos - cbegin();
@@ -385,7 +412,8 @@ void vector<T, Allocator>::pop_back()
 
 
 template <typename T, class Allocator>
-T* vector<T, Allocator>::erase(iterator pos)
+typename vector<T, Allocator>::iterator 
+vector<T, Allocator>::erase(iterator pos)
 {
     using traits = std::allocator_traits<allocator_type>;
     size_type idx = pos - begin();
