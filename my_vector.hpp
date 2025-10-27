@@ -1,3 +1,5 @@
+#pragma once
+
 #include <bits/stdc++.h>
 #include <memory>
 
@@ -311,7 +313,7 @@ template <typename T, class Allocator>
 vector<T, Allocator>& vector<T, Allocator>::operator=(const vector &other)
 {
     vector temp(other);
-    swap(*this, temp);
+    swap(temp);
 
     return *this;
 }
@@ -321,7 +323,7 @@ template <typename T, class Allocator>
 vector<T, Allocator>& vector<T, Allocator>::operator=(vector &&other)
 {
     vector temp(std::move(other));
-    swap(*this, temp);
+    swap(temp);
 
     return *this;
 }
@@ -332,7 +334,7 @@ vector<T, Allocator>&
 vector<T, Allocator>::operator=(std::initializer_list<value_type> ilist)
 {
     vector temp(ilist);
-    swap(*this, temp);
+    swap(temp);
 
     return *this;
 }

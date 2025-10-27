@@ -1,3 +1,3 @@
 run:
-	clang++ -g main.cpp
+	clang++ -O0 -g main.cpp
 	./a.out
