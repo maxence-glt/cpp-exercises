@@ -1,10 +1,11 @@
 #include "bits/stdc++.h"
 #include "my_vector.hpp"
-#include <memory>
 
 int main() {
+    My::vector<int> vec(10);
+    vec.back() = 1;
+    std::cout << (*(vec.end() - 1));
     using namespace My;
-
     std::allocator<int> alloc;
 
     // Testing constructors
@@ -26,8 +27,10 @@ int main() {
     v1 = std::move(v3);
     const auto ilist = {1, 2, 3, 4};
     v1 = ilist;
-    // v3 has been MOVED
+    // v3 (and v4/v8) has been MOVED
 
+    std::cout << v1.data() << '\n';
+    std::cout << v3.data();
 
     // Testing assign
 

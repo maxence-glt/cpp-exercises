@@ -76,24 +76,34 @@ public:
     /*** Element access ***/
     reference at(size_type pos);
     const_reference at(size_type pos) const;
-    reference  operator[](const size_type position) { return data[position]; } 
-    const_reference operator[](const size_type position) const { return data[position]; }
+
+    reference  operator[](const size_type position) { return data_[position]; } 
+    const_reference operator[](const size_type position) const { return data_[position]; }
+
+    reference front() { return data_[0]; }
+    const_reference front() const { return data_[0]; }
+
+    reference back() { return data_[size_ - 1]; }
+    const_reference back() const { return data_[size_ - 1]; }
+
+    pointer data() { return data_; }
+    const_pointer data() const { return data_; }
 
     /*** Iterators ***/
-    iterator       begin() noexcept { return data; }
-    const_iterator begin() const noexcept { return data; }
-    const_iterator cbegin() const noexcept { return data; }
+    iterator       begin() noexcept { return data_; }
+    const_iterator begin() const noexcept { return data_; }
+    const_iterator cbegin() const noexcept { return data_; }
 
-    iterator       end() noexcept { return data + size_; }
-    const_iterator end() const noexcept { return data + size_; }
-    const_iterator cend() const noexcept { return data + size_; }
+    iterator       end() noexcept { return data_ + size_; }
+    const_iterator end() const noexcept { return data_ + size_; }
+    const_iterator cend() const noexcept { return data_ + size_; }
 
     /*** Capacity ***/
     bool empty()         const noexcept { return !size_; }
     size_type size()     const noexcept { return size_; }
     size_type capacity() const noexcept { return capacity_; }
     size_type max_size() const noexcept { 
-        return std::allocator_traits<allocator_type>::max_size(allocator_); 
+        return __alloc_traits::max_size(allocator_); 
     }
 
     /*** Modifiers ***/
@@ -103,23 +113,24 @@ public:
     void push_back(const_reference value);
     void pop_back();
     void resize(size_type count, const_reference value = size_type());
+    void swap(vector &other) {
+        std::swap(size_, other.size_);
+        std::swap(data_, other.data_);
+        std::swap(capacity_, other.capacity_);
+        std::swap(allocator_, other.allocator_);
+    }
+
 
     /*** Other ***/
     allocator_type get_allocator() const { return allocator_; }
 
 
 private:
-    pointer        data;
+    pointer        data_;
     size_type      capacity_;
     size_type      size_;
     allocator_type allocator_;
 
-    void swap(vector &first, vector &second) {
-        std::swap(first.size_, second.size_);
-        std::swap(first.data, second.data);
-        std::swap(first.capacity_, second.capacity_);
-        std::swap(first.allocator_, second.allocator_);
-    }
 
     void grow(size_type newCap) {
         auto temp = __alloc_traits::allocate(allocator_, newCap);
@@ -132,9 +143,9 @@ private:
             __alloc_traits::destroy(allocator_, from);
         }
 
-        __alloc_traits::deallocate(allocator_, data, capacity_);
+        __alloc_traits::deallocate(allocator_, data_, capacity_);
 
-        data = temp;
+        data_ = temp;
         capacity_ = newCap;
     }
 };
@@ -142,13 +153,13 @@ private:
 // Default constructors
 template <typename T, class Allocator>
 vector<T, Allocator>::vector() noexcept
-: data(nullptr), capacity_(0), size_(0), allocator_(allocator_type{})
+: data_(nullptr), capacity_(0), size_(0), allocator_(allocator_type{})
 { /* Empty ctor */ }
 
 
 template <typename T, class Allocator>
 vector<T, Allocator>::vector(const Allocator &alloc)
-: data(nullptr), capacity_(0), size_(0), allocator_(alloc)
+: data_(nullptr), capacity_(0), size_(0), allocator_(alloc)
 { /* Empty constructor */}
 
 
@@ -157,13 +168,13 @@ vector<T, Allocator>::vector(const Allocator &alloc)
 template <typename T, class Allocator>
 vector<T, Allocator>::vector(size_type count,
                              const allocator_type &alloc)
-: data(nullptr), capacity_(count), size_(0), allocator_(alloc)
+: data_(nullptr), capacity_(count), size_(0), allocator_(alloc)
 {
     try {
-        data = __alloc_traits::allocate(allocator_, capacity_);
+        data_ = __alloc_traits::allocate(allocator_, capacity_);
 
         for (; size_ < count; ++size_)
-            __alloc_traits::construct(allocator_, data + size_);
+            __alloc_traits::construct(allocator_, data_ + size_);
     } catch (...) {
         auto from = begin();
         auto to   = end();
@@ -171,7 +182,7 @@ vector<T, Allocator>::vector(size_type count,
         for(; from != to; ++from)
             __alloc_traits::destroy(allocator_, from);
 
-        __alloc_traits::deallocate(allocator_, data, capacity_);
+        __alloc_traits::deallocate(allocator_, data_, capacity_);
 
         throw;
     }
@@ -181,12 +192,12 @@ vector<T, Allocator>::vector(size_type count,
 template <typename T, class Allocator>
 vector<T, Allocator>::vector(size_type count, const_reference v,
                              const allocator_type &alloc)
-: data(nullptr), capacity_(count), size_(0), allocator_(alloc)
+: data_(nullptr), capacity_(count), size_(0), allocator_(alloc)
 {
-    data = std::allocator_traits<allocator_type>::allocate(allocator_, capacity_);
+    data_ = std::allocator_traits<allocator_type>::allocate(allocator_, capacity_);
 
     for (; size_ < count; ++size_)
-        std::allocator_traits<Allocator>::construct(allocator_, data + size_, v);
+        std::allocator_traits<Allocator>::construct(allocator_, data_ + size_, v);
 }
 
 
@@ -200,65 +211,65 @@ vector<T, Allocator>::vector(InputIt first, InputIt last,
     const difference_type numOfElems = std::distance(first, last);
 
     capacity_ = numOfElems;
-    data = std::allocator_traits<allocator_type>::allocate(allocator_, capacity_);
+    data_ = std::allocator_traits<allocator_type>::allocate(allocator_, capacity_);
 
     for (; first != last; ++first, ++size_)
-        std::allocator_traits<allocator_type>::construct(allocator_, data + size_, *first);
+        std::allocator_traits<allocator_type>::construct(allocator_, data_ + size_, *first);
 }
 
 
 // Copy constructors
 template <typename T, class Allocator>
 vector<T, Allocator>::vector(const vector &other)
-: data(nullptr), capacity_(other.capacity_), size_(0), allocator_(other.allocator_)
+: data_(nullptr), capacity_(other.capacity_), size_(0), allocator_(other.allocator_)
 {
-    data = std::allocator_traits<allocator_type>::allocate(allocator_, capacity_);
+    data_ = std::allocator_traits<allocator_type>::allocate(allocator_, capacity_);
 
     for (; size_ < other.size_; ++size_)
-        std::allocator_traits<Allocator>::construct(allocator_, data + size_, *(other.data + size_));
+        std::allocator_traits<Allocator>::construct(allocator_, data_ + size_, *(other.data_ + size_));
 }
 
 template <typename T, class Allocator>
 vector<T, Allocator>::vector(const vector &other, const allocator_type &alloc)
-: data(nullptr), capacity_(other.capacity_), size_(0), allocator_(alloc)
+: data_(nullptr), capacity_(other.capacity_), size_(0), allocator_(alloc)
 {
-    data = std::allocator_traits<allocator_type>::allocate(allocator_, capacity_);
+    data_ = std::allocator_traits<allocator_type>::allocate(allocator_, capacity_);
 
     for (; size_ < other.size_; ++size_)
-        std::allocator_traits<Allocator>::construct(allocator_, data + size_, *(other.data + size_));
+        std::allocator_traits<Allocator>::construct(allocator_, data_ + size_, *(other.data_ + size_));
 }
 
 
 // Move constructors
 template <typename T, class Allocator>
 vector<T, Allocator>::vector(vector &&other)
-: data(other.data), capacity_(other.capacity_), 
+: data_(other.data_), capacity_(other.capacity_), 
     size_(other.size_), allocator_(std::move(other.allocator_))
 {
     other.size_ = 0;
     other.capacity_ = 0;
-    other.data = nullptr;
+    other.data_ = nullptr;
 }
 
 template <typename T, class Allocator>
 vector<T, Allocator>::vector(vector &&other, const allocator_type &alloc)
-: data(nullptr), capacity_(0), size_(0), allocator_(alloc)
+: data_(nullptr), capacity_(0), size_(0), allocator_(alloc)
 {
     using traits = std::allocator_traits<allocator_type>;
     if (allocator_ == other.allocator_) {
-        data = other.data; size_ = other.size_; capacity_ = other.capacity_;
-        other.data = nullptr; other.size_ = other.capacity_ = 0;
+        data_ = other.data_; size_ = other.size_; capacity_ = other.capacity_;
+        other.data_ = nullptr; other.size_ = other.capacity_ = 0;
     } else {
         if (other.size_) {
-            data = traits::allocate(allocator_, other.size_);
+            data_ = traits::allocate(allocator_, other.size_);
             capacity_ = size_ = other.size_;
             size_type i = 0;
             try {
                 for (; i < size_; ++i)
-                    traits::construct(allocator_, data + i, std::move(other.data[i]));
+                    traits::construct(allocator_, data_ + i, std::move(other.data_[i]));
             } catch (...) {
-                for (size_type j = 0; j < i; ++j) traits::destroy(allocator_, data + j);
-                traits::deallocate(allocator_, data, capacity_);
+                for (size_type j = 0; j < i; ++j) traits::destroy(allocator_, data_ + j);
+                traits::deallocate(allocator_, data_, capacity_);
                 throw;
             }
         }
@@ -269,12 +280,12 @@ vector<T, Allocator>::vector(vector &&other, const allocator_type &alloc)
 template <typename T, class Allocator>
 vector<T, Allocator>::vector(std::initializer_list<value_type> init,
                              const Allocator &alloc)
-: data(nullptr), capacity_(init.size()), size_(0), allocator_(alloc)
+: data_(nullptr), capacity_(init.size()), size_(0), allocator_(alloc)
 {
-    data = std::allocator_traits<Allocator>::allocate(allocator_, capacity_);
+    data_ = std::allocator_traits<Allocator>::allocate(allocator_, capacity_);
 
     for(; size_ < init.size(); ++size_)
-        std::allocator_traits<Allocator>::construct(allocator_, data + size_, *(init.begin() + size_));
+        std::allocator_traits<Allocator>::construct(allocator_, data_ + size_, *(init.begin() + size_));
 }
 
 
@@ -288,10 +299,10 @@ vector<T, Allocator>::~vector()
     for (; from != to; ++from)
         std::allocator_traits<Allocator>::destroy(allocator_, from);
 
-    std::allocator_traits<allocator_type>::deallocate(allocator_, data, capacity_);
+    std::allocator_traits<allocator_type>::deallocate(allocator_, data_, capacity_);
 
     size_ = 0; capacity_ = 0;
-    data = nullptr;
+    data_ = nullptr;
 }
 
 /*** Assignment operators ***/
@@ -333,8 +344,8 @@ void vector<T, Allocator>::assign(size_type count, const_reference value)
     clear();
 
     if (count > capacity_) {
-        __alloc_traits::deallocate(allocator_, data, capacity_);
-        data = __alloc_traits::allocate(allocator_, count);
+        __alloc_traits::deallocate(allocator_, data_, capacity_);
+        data_ = __alloc_traits::allocate(allocator_, count);
         capacity_ = count;
     }
 
@@ -352,13 +363,13 @@ void vector<T, Allocator>::assign(InputIt first, InputIt last)
     const difference_type numOfElems = std::distance(first, last);
 
     if (numOfElems > capacity_) {
-        __alloc_traits::deallocate(allocator_, data, capacity_);
-        data = __alloc_traits::allocate(allocator_, numOfElems);
+        __alloc_traits::deallocate(allocator_, data_, capacity_);
+        data_ = __alloc_traits::allocate(allocator_, numOfElems);
         capacity_ = numOfElems;
     }
 
     for (; first != last; ++first, ++size_)
-        std::allocator_traits<allocator_type>::construct(allocator_, data + size_, *first);
+        std::allocator_traits<allocator_type>::construct(allocator_, data_ + size_, *first);
 }
 
 template <typename T, class Allocator>
@@ -367,14 +378,14 @@ void vector<T, Allocator>::assign(std::initializer_list<value_type> ilist)
     clear();
 
     if (ilist.size() > capacity_) {
-        __alloc_traits::deallocate(allocator_, data, capacity_);
-        data = __alloc_traits::allocate(allocator_, ilist.size());
+        __alloc_traits::deallocate(allocator_, data_, capacity_);
+        data_ = __alloc_traits::allocate(allocator_, ilist.size());
         capacity_ = ilist.size();
     }
 
     size_ = ilist.size();
     for (const auto &i : ilist)
-        std::allocator_traits<allocator_type>::construct(allocator_, data + size_, i);
+        std::allocator_traits<allocator_type>::construct(allocator_, data_ + size_, i);
 }
 
 /*** Element access ***/
@@ -382,7 +393,7 @@ template <typename T, class Allocator>
 T& vector<T, Allocator>::at(size_type pos)
 {
     if (pos < size_)
-        return data[pos];
+        return data_[pos];
 
     throw(std::out_of_range("Index out-of-range"));
 }
@@ -391,7 +402,7 @@ template <typename T, class Allocator>
 const T& vector<T, Allocator>::at(size_type pos) const
 {
     if (pos < size_)
-        return data[pos];
+        return data_[pos];
 
     throw(std::out_of_range("Index out-of-range"));
 
@@ -415,7 +426,7 @@ vector<T, Allocator>::insert(const_iterator pos, const_reference value)
     if (size_ == capacity_)
         grow(capacity_ ? capacity_ << 1 : 1);
 
-    T* const out = data + idx;
+    T* const out = data_ + idx;
 
     if (idx == size_) {
         traits::construct(allocator_, end(), value);
@@ -423,12 +434,12 @@ vector<T, Allocator>::insert(const_iterator pos, const_reference value)
         return out;
     }
 
-    traits::construct(allocator_, end(), std::move(data[size_ - 1]));
+    traits::construct(allocator_, end(), std::move(data_[size_ - 1]));
 
     for (size_type i = size_ - 1; i > idx; --i)
-        data[i] = std::move(data[i - 1]);
+        data_[i] = std::move(data_[i - 1]);
 
-    data[idx] = value;
+    data_[idx] = value;
 
     ++size_;
     return out;
@@ -441,7 +452,7 @@ void vector<T, Allocator>::push_back(const_reference value)
         grow(!capacity_ ? 1 : capacity_ << 1);
 
     std::allocator_traits<allocator_type>::construct(allocator_, 
-                                                     data + size_,
+                                                     data_ + size_,
                                                      value);
     ++size_;
 }
@@ -462,11 +473,11 @@ vector<T, Allocator>::erase(iterator pos)
     using traits = std::allocator_traits<allocator_type>;
     size_type idx = pos - begin();
 
-    T* const out = data + idx;
+    T* const out = data_ + idx;
 
     --size_;
     for (size_type i = idx; i < size_; ++i)
-        data[i] = std::move(data[i + 1]);
+        data_[i] = std::move(data_[i + 1]);
 
     traits::destroy(allocator_, end());
 
@@ -482,11 +493,11 @@ void vector<T, Allocator>::resize(size_type count, const_reference value)
 
     const size_type n_to_move = (size_ < count) ? size_ : count;
 
-    auto new_data = traits::allocate(allocator_, count);
-    auto cur = new_data;
+    auto new_data_ = traits::allocate(allocator_, count);
+    auto cur = new_data_;
 
     for (size_type i = 0; i < n_to_move; ++i, ++cur)
-            traits::construct(allocator_, cur, std::move(data[i]));
+            traits::construct(allocator_, cur, std::move(data_[i]));
 
     for (auto it = begin(); it != end(); ++it)
         traits::destroy(allocator_, it);
@@ -494,8 +505,8 @@ void vector<T, Allocator>::resize(size_type count, const_reference value)
     for (size_type i = n_to_move; i < capacity_; ++i)
         traits::construct(allocator_, begin() + i, value);
 
-    traits::deallocate(allocator_, data, capacity_);
-    data = new_data;
+    traits::deallocate(allocator_, data_, capacity_);
+    data_ = new_data_;
     capacity_ = count;
     size_ = n_to_move;
 }
