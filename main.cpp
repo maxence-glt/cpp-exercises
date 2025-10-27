@@ -1,95 +1,122 @@
 #include "bits/stdc++.h"
 #include "my_vector.hpp"
 #include "my_unique_ptr.hpp"
-
-int main(){
-    /* Test Cases*/
-
+ 
+// helper class for runtime polymorphism demo below
+struct B
+{
+    virtual ~B() = default;
+ 
+    virtual void bar() { std::cout << "B::bar\n"; }
+};
+ 
+struct D : B
+{
+    D() { std::cout << "D::D\n"; }
+    ~D() { std::cout << "D::~D\n"; }
+ 
+    void bar() override { std::cout << "D::bar\n"; }
+};
+ 
+// a function consuming a unique_ptr can take it by value or by rvalue reference
+My::unique_ptr<D> pass_through(My::unique_ptr<D> p)
+{
+    p->bar();
+    return p;
+}
+ 
+// helper function for the custom deleter demo below
+void close_file(std::FILE* fp)
+{
+    std::fclose(fp);
+}
+ 
+// unique_ptr-based linked list demo
+struct List
+{
+    struct Node
     {
-        /* Non member function operator== 
-           Comparison with another unique_ptr or nullptr */ 
-        My::unique_ptr<int> ptr1(new int(10));
-        My::unique_ptr<int> ptr2(new int(10));
-        assert(ptr1 == ptr1);   
-        assert(ptr1 != ptr2);
-        std::cout << "Test 1 passed\n";
-    }
-
+        int data;
+        My::unique_ptr<Node> next;
+    };
+ 
+    My::unique_ptr<Node> head;
+ 
+    ~List()
     {
-        /* Create and access */
-        My::unique_ptr<int> ptr(new int(10));
-        assert(ptr != nullptr);
-        assert(*ptr == 10);
-        std::cout << "Test 2 passed\n";
+        // destroy list nodes sequentially in a loop, the default destructor
+        // would have invoked its “next”'s destructor recursively, which would
+        // cause stack overflow for sufficiently large lists.
+        while (head)
+        {
+            auto next = std::move(head->next);
+            head = std::move(next);
+        }
     }
-
+ 
+    void push(int data)
     {
-        /* Reset unique_ptr 
-           Replaces the managed object with a new one*/
-        My::unique_ptr<int> ptr(new int(10));
-        ptr.reset(new int(20));
-        assert(ptr != nullptr);
-        assert(*ptr == 20);
-
-        // Self-reset test
-        ptr.reset(ptr.get());
-        std::cout << "Test 3 passed\n";
+        head = My::unique_ptr<Node>(new Node{data, std::move(head)});
     }
-
+};
+ 
+int main()
+{
+    std::cout << "1) Unique ownership semantics demo\n";
     {
-        /* Release unique_ptr ownership - 
-           Returns a pointer to the managed object and releases ownership */
-        My::unique_ptr<double> ptr(new double(3.14));
-        double* rawPtr = ptr.release();
-        assert(ptr == nullptr);
-        assert(rawPtr != nullptr);
-        assert(*rawPtr == 3.14);
-        std::cout << "Test 4 passed\n";
+        // Create a (uniquely owned) resource
+        My::unique_ptr<D> p = My::make_unique<D>();
+ 
+        // Transfer ownership to “pass_through”,
+        // which in turn transfers ownership back through the return value
+        My::unique_ptr<D> q = pass_through(std::move(p));
+ 
+        // “p” is now in a moved-from 'empty' state, equal to nullptr
+        assert(!p);
     }
-
+ 
+    std::cout << "\n" "2) Runtime polymorphism demo\n";
     {
-        /* Non-member function swap
-           Swap the managed objects */
-        My::unique_ptr<int> ptr1(new int(10));
-        My::unique_ptr<int> ptr2(new int (20));
-        swap(ptr1, ptr2);
-        assert(*ptr1 == 20);
-        assert(*ptr2 == 10);
-        std::cout << "Test 5 passed\n";
+        // Create a derived resource and point to it via base type
+        My::unique_ptr<B> p = My::make_unique<D>();
+ 
+        // Dynamic dispatch works as expected
+        p->bar();
     }
-
+ 
+    std::cout << "\n" "3) Custom deleter demo\n";
+    std::ofstream("demo.txt") << 'x'; // prepare the file to read
     {
-        /* Get the raw underlying pointer */
-        int* x = new int(10);
-        My::unique_ptr<int> ptr(x);
-        int* rawPtr = ptr.get();
-        assert(*rawPtr == 10);
-        assert(rawPtr == x);
-        std::cout << "Test 6 passed\n";
-    }
-
+        using unique_file_t = My::unique_ptr<std::FILE, decltype(&close_file)>;
+        unique_file_t fp(std::fopen("demo.txt", "r"), &close_file);
+        if (fp)
+            std::cout << char(std::fgetc(fp.get())) << '\n';
+    } // “close_file()” called here (if “fp” is not null)
+ 
+    std::cout << "\n" "4) Custom lambda expression deleter and exception safety demo\n";
+    try
     {
-        /* operator bool to test if the unique pointer owns an object */
-        My::unique_ptr<int> ptr(new int(42));
-        assert(ptr);
-        ptr.reset(nullptr);
-        assert(!ptr);
-        std::cout << "Test 7 passed\n";
+        My::unique_ptr<D, void(*)(D*)> p(new D, [](D* ptr)
+        {
+            std::cout << "destroying from a custom deleter...\n";
+            delete ptr;
+        });
+ 
+        throw std::runtime_error(""); // “p” would leak here if it were a plain pointer
     }
-
+    catch (const std::exception&)
     {
-        /* indirection operator* to dereference pointer to managed object,
-           member access operator -> to call member function*/ 
-        struct X{
-            int n;
-            int foo(){ return n; }
-        };
-
-        My::unique_ptr<X> ptr(new X{10});
-        assert((*ptr).n == 10);
-        assert(ptr->foo() == 10);
-        std::cout << "Test 8 passed\n";
+        std::cout << "Caught exception\n";
     }
-
-    return 0;
+ 
+    std::cout << "\n" "6) Linked list demo\n";
+    {
+        List wall;
+        const int enough{1'000'000};
+        for (int beer = 0; beer != enough; ++beer)
+            wall.push(beer);
+ 
+        std::cout.imbue(std::locale("en_US.UTF-8"));
+        std::cout << enough << " bottles of beer on the wall...\n";
+    } // destroys all the beers
 }
