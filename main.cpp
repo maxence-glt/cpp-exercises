@@ -5,9 +5,7 @@
 #include "my_vector.hpp"
 
 int main() {
-    My::unordered_map<int, int> m;
-    m.insert({1, 1});
-    std::cout << "1";
+    std::cout << My::nextPrime(1875);
 
     return 0;
 }

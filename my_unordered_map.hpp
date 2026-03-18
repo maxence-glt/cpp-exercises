@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <bits/stdc++.h>
 #include <functional>
 #include <memory>
@@ -21,6 +22,64 @@ namespace My {
 
 constexpr std::size_t default_resize = 13; // Size of backing array after first resize
 
+static constexpr std::array<int, 170> primes = {
+    2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
+    73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151,
+    157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233,
+    239, 241, 251, 257, 263, 269, 271, 277, 281, 283, 293, 307, 311, 313, 317,
+    331, 337, 347, 349, 353, 359, 367, 373, 379, 383, 389, 397, 401, 409, 419,
+    421, 431, 433, 439, 443, 449, 457, 461, 463, 467, 479, 487, 491, 499, 503,
+    509, 521, 523, 541, 547, 557, 563, 569, 571, 577, 587, 593, 599, 601, 607,
+    613, 617, 619, 631, 641, 643, 647, 653, 659, 661, 673, 677, 683, 691, 701,
+    709, 719, 727, 733, 739, 743, 751, 757, 761, 769, 773, 787, 797, 809, 811,
+    821, 823, 827, 829, 839, 853, 857, 859, 863, 877, 881, 883, 887, 907, 911,
+    919, 929, 937, 941, 947, 953, 967, 971, 977, 983, 991, 997, 1009, 1013
+};
+
+[[nodiscard]] static bool isPrime(int n) {
+    if (n < 2) return false;
+
+    for (int p : primes) {
+        const std::int64_t pp = 1LL * p * p;
+        if (pp > n)
+            return true;
+        if (n % p == 0)
+            return n == p;
+    }
+
+    for (std::int64_t d = primes.back() + 2; d * d <= n; d += 2)
+        if (n % d == 0)
+            return false;
+
+    return true;
+}
+
+[[nodiscard]] static int nextPrime(int n) {
+    constexpr int kMax = std::numeric_limits<int>::max();
+
+    if (n >= kMax)
+        throw std::overflow_error("nextPrime: no prime exists above INT_MAX");
+
+    if (n < 2)
+        return 2;
+
+    const int firstCandidate = (n == 2) ? 3 : (n % 2 == 0 ? n + 1 : n + 2);
+    if (firstCandidate <= primes.back())
+        return *std::lower_bound(primes.begin(), primes.end(), firstCandidate);
+
+    int candidate = firstCandidate;
+    while (candidate > 0) {
+        if (isPrime(candidate))
+            return candidate;
+
+        if (candidate > kMax - 2)
+            break;
+        candidate += 2;
+    }
+
+    throw std::overflow_error("nextPrime: no prime exists in int range");
+}
+
 template <typename Key,
           typename T,
           typename Hash      = std::hash<Key>,
@@ -29,9 +88,9 @@ template <typename Key,
 class unordered_map {
 public:
     /*** C++ Standard Named Requirements for Containers***/
-    using key_type    = Key;
-    using mapped_type = T;
-    using value_type  = std::pair<const Key, T>;
+    using key_type        = Key;
+    using mapped_type     = T;
+    using value_type      = std::pair<const Key, T>;
 
     using hasher          = Hash;
     using key_equal       = KeyEqual;
@@ -106,11 +165,15 @@ public:
     std::pair<iterator, bool> insert(const value_type& value) {
         if (buckets == nullptr) {
             buckets = std::unique_ptr<std::list<value_type>[]>(new std::list<value_type>[default_resize]);
-            bucket_count = 13;
+            buckets_size = 13;
+        }
+
+        if (size()+1 > bucket_count()) {
+            
         }
 
         auto key = hash(value.first);
-        auto index = key % bucket_count;
+        auto index = key % bucket_count();
         
         for (auto &node : buckets[index])
             if (node.first == key) 
@@ -133,6 +196,9 @@ public:
             std::numeric_limits<difference_type >::max()
         );
     }
+
+    /*** Bucket interface ***/
+    size_type bucket_count() const { return buckets_size; }
     
 
 private:
@@ -155,7 +221,7 @@ private:
  *  the STL's linked-list implementation
  */
     std::unique_ptr<std::list<value_type>[]> buckets;
-    size_type                                bucket_count;
+    size_type                                buckets_size;
     size_type                                total_elements;
     float                                    max_load_factor;
     hasher                                   hash;
@@ -168,7 +234,7 @@ private:
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
 unordered_map<Key, T, Hash, KeyEqual, Allocator>
 ::unordered_map()
-: buckets(nullptr), bucket_count(0), total_elements(0), max_load_factor(1.f),
+: buckets(nullptr), buckets_size(0), total_elements(0), max_load_factor(1.f),
     hash(hasher{}), comparator(key_equal{}), allocator(allocator_type{})
 {/* Empty ctor */}
 
@@ -178,7 +244,7 @@ unordered_map<Key, T, Hash, KeyEqual, Allocator>
                 const Hash &hash, 
                 const key_equal &equal, 
                 const Allocator &alloc)
-: buckets(nullptr), bucket_count(0), total_elements(0), max_load_factor(1.f),
+: buckets(nullptr), buckets_size(0), total_elements(0), max_load_factor(1.f),
     hash(hash), comparator(equal), allocator(alloc)
 {/* Empty ctor */}
 
@@ -186,7 +252,7 @@ unordered_map<Key, T, Hash, KeyEqual, Allocator>
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
 unordered_map<Key, T, Hash, KeyEqual, Allocator>
 ::unordered_map(const Allocator& alloc)
-: buckets(nullptr), bucket_count(0), total_elements(0), max_load_factor(1.f),
+: buckets(nullptr), buckets_size(0), total_elements(0), max_load_factor(1.f),
     hash(hasher{}), comparator(key_equal{}), allocator(alloc)
 {/* Empty ctor */}
 
@@ -198,7 +264,7 @@ unordered_map<Key, T, Hash, KeyEqual, Allocator>
                 const Hash& hash,
                 const key_equal& equal,
                 const Allocator& alloc)
-: buckets(nullptr), bucket_count(0), total_elements(0), max_load_factor(1.f),
+: buckets(nullptr), buckets_size(0), total_elements(0), max_load_factor(1.f),
     hash(hash), comparator(equal), allocator(alloc)
 { insert(first, last); }
 
@@ -208,7 +274,7 @@ const T& unordered_map<Key, T, Hash, KeyEqual, Allocator>::at(const Key &key) co
     if (empty())
         throw(std::out_of_range("Empty map"));
 
-    for (auto &node : buckets[hash(key) % bucket_count])
+    for (auto &node : buckets[hash(key) % buckets_size])
         if (node.first == key) 
             return node.second;
 
