@@ -20,7 +20,7 @@ namespace My {
  * erase                                     - Only to the element erased
  */
 
-constexpr std::size_t default_resize = 13; // Size of backing array after first resize
+constexpr std::size_t default_resize = 2; // Size of backing array after first resize
 
 static constexpr std::array<int, 170> primes = {
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
@@ -113,7 +113,7 @@ public:
 
 
     /*** Constructors and Destructors***/
-    // Default constructors, sets max_load_factor() to 1.0
+    // Default constructors, sets _max_load_factor() to 1.0
     unordered_map();
     explicit unordered_map(size_type bucket_count,
                            const Hash &hash = Hash(),
@@ -149,7 +149,7 @@ public:
 
     // TODO: Destructor
     ~unordered_map() {
-        //std::allocator_traits<allocator_type>::deallocate(allocator, buckets, bucket_count);
+        //std::allocator_traits<allocator_type>::deallocate(allocator, _buckets, bucket_count);
     }
 
     /*** Element access ***/
@@ -163,42 +163,45 @@ public:
 
     /*** Modifiers ***/
     std::pair<iterator, bool> insert(const value_type& value) {
-        if (buckets == nullptr) {
-            buckets = std::unique_ptr<std::list<value_type>[]>(new std::list<value_type>[default_resize]);
-            buckets_size = 13;
+        if (size() == 0) rehash(default_resize);
+
+        if (size()+1 > bucket_count()*max_load_factor()) {
+            int newBucketCount = nextPrime(bucket_count());
+            rehash(newBucketCount);
         }
 
-        if (size()+1 > bucket_count()) {
-            
-        }
-
-        auto key = hash(value.first);
+        auto key = _hash_function(value.first);
         auto index = key % bucket_count();
         
-        for (auto &node : buckets[index])
+        for (auto &node : _buckets[index])
             if (node.first == key) 
                 return std::pair{&node, false};
 
-        buckets[index].push_front(value);
-        total_elements++;
-        return {&buckets[index].front(), true};
+        _buckets[index].push_front(value);
+        _size++;
+        return {&_buckets[index].front(), true};
     }
 
     template<class InputIt>
     void insert(InputIt first, InputIt last);
 
     /*** Capacity ***/
-    bool empty()         const noexcept { return !total_elements; }
-    size_type size()     const noexcept { return total_elements; }
+    bool empty()         const noexcept { return !_size; }
+    size_type size()     const noexcept { return _size; }
     size_type max_size() const noexcept { 
         return std::min<size_type>(
-            __alloc_traits::max_size(allocator),
+            __alloc_traits::max_size(_allocator),
             std::numeric_limits<difference_type >::max()
         );
     }
 
     /*** Bucket interface ***/
-    size_type bucket_count() const { return buckets_size; }
+    size_type bucket_count() const { return _bucket_count; }
+
+    /*** Hash policy ***/
+    float max_load_factor() const { return _max_load_factor; }
+    void max_load_factor(float ml) { _max_load_factor = max_load_factor(); } ;
+    void rehash(size_type count);
     
 
 private:
@@ -220,13 +223,13 @@ private:
  *  This is obviously too complex to implement so I will be sticking with 
  *  the STL's linked-list implementation
  */
-    std::unique_ptr<std::list<value_type>[]> buckets;
-    size_type                                buckets_size;
-    size_type                                total_elements;
-    float                                    max_load_factor;
-    hasher                                   hash;
-    key_equal                                comparator;
-    allocator_type                           allocator;
+    std::unique_ptr<std::list<value_type>[]> _buckets;
+    size_type                                _bucket_count;
+    size_type                                _size;
+    float                                    _max_load_factor;
+    hasher                                   _hash_function;
+    key_equal                                _key_eq;
+    allocator_type                           _allocator;
 
 };
 
@@ -234,8 +237,8 @@ private:
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
 unordered_map<Key, T, Hash, KeyEqual, Allocator>
 ::unordered_map()
-: buckets(nullptr), buckets_size(0), total_elements(0), max_load_factor(1.f),
-    hash(hasher{}), comparator(key_equal{}), allocator(allocator_type{})
+: _buckets(nullptr), _bucket_count(0), _size(0), _max_load_factor(1.f),
+    _hash_function(hasher{}), _key_eq(key_equal{}), _allocator(allocator_type{})
 {/* Empty ctor */}
 
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
@@ -244,16 +247,16 @@ unordered_map<Key, T, Hash, KeyEqual, Allocator>
                 const Hash &hash, 
                 const key_equal &equal, 
                 const Allocator &alloc)
-: buckets(nullptr), buckets_size(0), total_elements(0), max_load_factor(1.f),
-    hash(hash), comparator(equal), allocator(alloc)
+: _buckets(nullptr), _bucket_count(0), _size(0), _max_load_factor(1.f),
+    _hash_function(hash), _key_eq(equal), _allocator(alloc)
 {/* Empty ctor */}
 
 
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
 unordered_map<Key, T, Hash, KeyEqual, Allocator>
 ::unordered_map(const Allocator& alloc)
-: buckets(nullptr), buckets_size(0), total_elements(0), max_load_factor(1.f),
-    hash(hasher{}), comparator(key_equal{}), allocator(alloc)
+: _buckets(nullptr), _bucket_count(0), _size(0), _max_load_factor(1.f),
+    _hash_function(hasher{}), _key_eq(key_equal{}), _allocator(alloc)
 {/* Empty ctor */}
 
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
@@ -264,8 +267,8 @@ unordered_map<Key, T, Hash, KeyEqual, Allocator>
                 const Hash& hash,
                 const key_equal& equal,
                 const Allocator& alloc)
-: buckets(nullptr), buckets_size(0), total_elements(0), max_load_factor(1.f),
-    hash(hash), comparator(equal), allocator(alloc)
+: _buckets(nullptr), _bucket_count(0), _size(0), _max_load_factor(1.f),
+    _hash_function(hash), _key_eq(equal), _allocator(alloc)
 { insert(first, last); }
 
 /*** Element access ***/
@@ -274,7 +277,7 @@ const T& unordered_map<Key, T, Hash, KeyEqual, Allocator>::at(const Key &key) co
     if (empty())
         throw(std::out_of_range("Empty map"));
 
-    for (auto &node : buckets[hash(key) % buckets_size])
+    for (auto &node : _buckets[_hash_function(key) % _bucket_count])
         if (node.first == key) 
             return node.second;
 
@@ -286,6 +289,34 @@ template<class InputIt>
 void unordered_map<Key, T, Hash, KeyEqual, Allocator>
 ::insert(InputIt first, InputIt last) {
     const difference_type numOfElems = std::distance(first, last);
+}
+
+/*** Hash policy ***/
+template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
+void unordered_map<Key, T, Hash, KeyEqual, Allocator>::rehash(size_type n) {
+    const size_type min_buckets =
+        nextPrime(static_cast<size_type>(
+            std::ceil(static_cast<double>(size() / max_load_factor()))));
+
+    if (n < min_buckets)
+        n = min_buckets;
+
+    if (n == _bucket_count)
+        return;
+
+    auto newBuckets = std::make_unique<std::list<value_type>[]>(n);
+
+    for (int i = 0; i < bucket_count(); ++i) {
+        auto it = _buckets[i].begin();
+        while (it != _buckets[i].end()) {
+            auto curr = it++;
+            auto newIndex = _hash_function(curr->first) % n;
+            newBuckets[newIndex].splice(newBuckets[newIndex].begin(), _buckets[i], curr);
+        }
+    }
+
+    _buckets = std::move(newBuckets);
+    _bucket_count = n;
 }
 
 } // namespace My
