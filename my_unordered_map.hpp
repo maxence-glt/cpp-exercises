@@ -19,6 +19,8 @@ namespace My {
  * erase                                     - Only to the element erased
  */
 
+constexpr std::size_t default_resize = 13; // Size of backing array after first resize
+
 template <typename Key,
           typename T,
           typename Hash      = std::hash<Key>,
@@ -86,13 +88,51 @@ public:
                   const Allocator& alloc)
         : unordered_map(first, last, bucket_count, hash, key_equal(), alloc) {}
 
-    // Destructor
-    ~unordered_map();
+    // TODO: Destructor
+    ~unordered_map() {
+        //std::allocator_traits<allocator_type>::deallocate(allocator, buckets, bucket_count);
+    }
+
+    /*** Element access ***/
+    T& at(const Key& key) {
+        return const_cast<T&>(std::as_const(*this).at(key));
+    }
+    const T& at(const Key& key) const;
+
+    T& operator[](const Key &key);
+    T& operator[](Key &&key);
 
     /*** Modifiers ***/
+    std::pair<iterator, bool> insert(const value_type& value) {
+        if (buckets == nullptr) {
+            buckets = std::unique_ptr<std::list<value_type>[]>(new std::list<value_type>[default_resize]);
+            bucket_count = 13;
+        }
+
+        auto key = hash(value.first);
+        auto index = key % bucket_count;
+        
+        for (auto &node : buckets[index])
+            if (node.first == key) 
+                return std::pair{&node, false};
+
+        buckets[index].push_front(value);
+        total_elements++;
+        return {&buckets[index].front(), true};
+    }
+
     template<class InputIt>
     void insert(InputIt first, InputIt last);
 
+    /*** Capacity ***/
+    bool empty()         const noexcept { return !total_elements; }
+    size_type size()     const noexcept { return total_elements; }
+    size_type max_size() const noexcept { 
+        return std::min<size_type>(
+            __alloc_traits::max_size(allocator),
+            std::numeric_limits<difference_type >::max()
+        );
+    }
     
 
 private:
@@ -114,16 +154,17 @@ private:
  *  This is obviously too complex to implement so I will be sticking with 
  *  the STL's linked-list implementation
  */
-    std::list<value_type> *buckets;
-    size_type             bucket_count;
-    size_type             total_elements;
-    float                 max_load_factor;
-    hasher                hash;
-    key_equal             comparator;
-    allocator_type        allocator;
+    std::unique_ptr<std::list<value_type>[]> buckets;
+    size_type                                bucket_count;
+    size_type                                total_elements;
+    float                                    max_load_factor;
+    hasher                                   hash;
+    key_equal                                comparator;
+    allocator_type                           allocator;
 
 };
 
+/*** Constructors ***/
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
 unordered_map<Key, T, Hash, KeyEqual, Allocator>
 ::unordered_map()
@@ -160,6 +201,19 @@ unordered_map<Key, T, Hash, KeyEqual, Allocator>
 : buckets(nullptr), bucket_count(0), total_elements(0), max_load_factor(1.f),
     hash(hash), comparator(equal), allocator(alloc)
 { insert(first, last); }
+
+/*** Element access ***/
+template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
+const T& unordered_map<Key, T, Hash, KeyEqual, Allocator>::at(const Key &key) const {
+    if (empty())
+        throw(std::out_of_range("Empty map"));
+
+    for (auto &node : buckets[hash(key) % bucket_count])
+        if (node.first == key) 
+            return node.second;
+
+    throw(std::out_of_range("No key found"));
+}
 
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
 template<class InputIt>

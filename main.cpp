@@ -5,8 +5,9 @@
 #include "my_vector.hpp"
 
 int main() {
-    std::unordered_map<int, int> m;
-    m[3] = 3;
-    std::cout << sizeof(m);
+    My::unordered_map<int, int> m;
+    m.insert({1, 1});
+    std::cout << "1";
+
     return 0;
 }
