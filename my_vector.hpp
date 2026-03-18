@@ -1,6 +1,6 @@
 #pragma once
 
-#include </usr/local/include/bits/stdc++.h>
+#include <bits/stdc++.h>
 #include <memory>
 
 namespace My {
@@ -161,7 +161,7 @@ vector<T, Allocator>::vector() noexcept
 template <typename T, class Allocator>
 vector<T, Allocator>::vector(const Allocator &alloc)
 : data_(nullptr), capacity_(0), size_(0), allocator_(alloc)
-{ /* Empty constructor */}
+{ /* Empty ctor */}
 
 
 // Fill constructors

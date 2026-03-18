@@ -1,8 +1,8 @@
-CXX=/opt/homebrew/opt/llvm/bin/clang++
+CXX=clang++
+CPP_FLAGS = -std=c++23 -I /usr/local/include
 
 run:
-	$(CXX) -O3 -std=c++23 main.cpp
-	#-Rpass=loop-vectorize -Rpass-missed=loop-vectorize
+	$(CXX) -O3 $(CPP_FLAGS) main.cpp
 	./a.out
 debug:
 	$(CXX) -O0 -g -fno-omit-frame-pointer -fno-optimize-sibling-calls \
