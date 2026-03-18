@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bits/stdc++.h>
+#include </usr/local/include/bits/stdc++.h>
 #include <memory>
 
 namespace My {
@@ -12,7 +12,7 @@ namespace My {
  *       want this to be an extra 2000 lines
  */
 
-template <typename T, class Allocator = std::allocator<T>>
+template <typename T, typename Allocator = std::allocator<T>>
 class vector {
 public:
     /*** C++ Standard Named Requirements for Containers***/
@@ -32,7 +32,6 @@ public:
 
     static_assert((std::is_same<typename allocator_type::value_type, value_type>::value),
                   "Allocator::value_type must be same type as value_type");
-
 
 
     /*** Constructors and Destructors***/

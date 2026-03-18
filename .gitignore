@@ -41,3 +41,5 @@
 *.dwo
 a.out*
 *DS_Store*
+compile_commands.json
+.cache/
