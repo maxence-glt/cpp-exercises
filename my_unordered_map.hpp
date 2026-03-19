@@ -148,23 +148,19 @@ public:
         : unordered_map(first, last, bucket_count, hash, key_equal(), alloc) {}
 
     // TODO: Destructor
-    ~unordered_map() {
-        //std::allocator_traits<allocator_type>::deallocate(allocator, _buckets, bucket_count);
-    }
+    ~unordered_map() = default;
 
-    /*** Element access ***/
+    /*** Lookup ***/
     T& at(const Key& key) {
         return const_cast<T&>(std::as_const(*this).at(key));
     }
     const T& at(const Key& key) const;
 
-    T& operator[](const Key &key);
-    T& operator[](Key &&key);
+    T& operator[](const Key& key) { return subscriptHelper(key); }
+    T& operator[](Key&& key) { return subscriptHelper(std::move(key)); }
 
     /*** Modifiers ***/
     std::pair<iterator, bool> insert(const value_type& value) {
-        if (size() == 0) rehash(default_resize);
-
         if (size()+1 > bucket_count()*max_load_factor()) {
             int newBucketCount = nextPrime(bucket_count());
             rehash(newBucketCount);
@@ -178,7 +174,7 @@ public:
                 return std::pair{&node, false};
 
         _buckets[index].push_front(value);
-        _size++;
+        ++_size;
         return {&_buckets[index].front(), true};
     }
 
@@ -190,7 +186,7 @@ public:
     size_type size()     const noexcept { return _size; }
     size_type max_size() const noexcept { 
         return std::min<size_type>(
-            __alloc_traits::max_size(_allocator),
+            _buckets.get().max_size(),
             std::numeric_limits<difference_type >::max()
         );
     }
@@ -223,14 +219,32 @@ private:
  *  This is obviously too complex to implement so I will be sticking with 
  *  the STL's linked-list implementation
  */
-    std::unique_ptr<std::list<value_type>[]> _buckets;
+    std::unique_ptr<std::list<value_type, allocator_type>[]> _buckets;
     size_type                                _bucket_count;
     size_type                                _size;
     float                                    _max_load_factor;
     hasher                                   _hash_function;
     key_equal                                _key_eq;
-    allocator_type                           _allocator;
 
+    /*** Private helpers ***/
+    T& subscriptHelper(Key &&key) {
+        auto index = _hash_function(key) % bucket_count();
+
+        for (auto &node : _buckets[index])
+        if (_key_eq(node.first, key))
+            return node.second;
+
+        if (size()+1 > bucket_count()*max_load_factor()) {
+            int newBucketCount = nextPrime(bucket_count());
+            rehash(newBucketCount);
+        }
+
+        index = _hash_function(key) % bucket_count();
+
+        _buckets[index].push_front(value_type{key, T{}});
+        ++_size;
+        return _buckets[index].front().second;
+    }
 };
 
 /*** Constructors ***/
@@ -238,7 +252,7 @@ template <typename Key, typename T, typename Hash, typename KeyEqual, typename A
 unordered_map<Key, T, Hash, KeyEqual, Allocator>
 ::unordered_map()
 : _buckets(nullptr), _bucket_count(0), _size(0), _max_load_factor(1.f),
-    _hash_function(hasher{}), _key_eq(key_equal{}), _allocator(allocator_type{})
+    _hash_function(hasher{}), _key_eq(key_equal{})
 {/* Empty ctor */}
 
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
@@ -248,7 +262,7 @@ unordered_map<Key, T, Hash, KeyEqual, Allocator>
                 const key_equal &equal, 
                 const Allocator &alloc)
 : _buckets(nullptr), _bucket_count(0), _size(0), _max_load_factor(1.f),
-    _hash_function(hash), _key_eq(equal), _allocator(alloc)
+    _hash_function(hash), _key_eq(equal)
 {/* Empty ctor */}
 
 
@@ -256,7 +270,7 @@ template <typename Key, typename T, typename Hash, typename KeyEqual, typename A
 unordered_map<Key, T, Hash, KeyEqual, Allocator>
 ::unordered_map(const Allocator& alloc)
 : _buckets(nullptr), _bucket_count(0), _size(0), _max_load_factor(1.f),
-    _hash_function(hasher{}), _key_eq(key_equal{}), _allocator(alloc)
+    _hash_function(hasher{}), _key_eq(key_equal{})
 {/* Empty ctor */}
 
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
@@ -268,10 +282,10 @@ unordered_map<Key, T, Hash, KeyEqual, Allocator>
                 const key_equal& equal,
                 const Allocator& alloc)
 : _buckets(nullptr), _bucket_count(0), _size(0), _max_load_factor(1.f),
-    _hash_function(hash), _key_eq(equal), _allocator(alloc)
+    _hash_function(hash), _key_eq(equal)
 { insert(first, last); }
 
-/*** Element access ***/
+/*** Lookup ***/
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
 const T& unordered_map<Key, T, Hash, KeyEqual, Allocator>::at(const Key &key) const {
     if (empty())
@@ -294,6 +308,8 @@ void unordered_map<Key, T, Hash, KeyEqual, Allocator>
 /*** Hash policy ***/
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
 void unordered_map<Key, T, Hash, KeyEqual, Allocator>::rehash(size_type n) {
+    if (n < default_resize) n = default_resize;
+
     const size_type min_buckets =
         nextPrime(static_cast<size_type>(
             std::ceil(static_cast<double>(size() / max_load_factor()))));
@@ -315,7 +331,7 @@ void unordered_map<Key, T, Hash, KeyEqual, Allocator>::rehash(size_type n) {
         }
     }
 
-    _buckets = std::move(newBuckets);
+    std::swap(_buckets, newBuckets);
     _bucket_count = n;
 }
 
