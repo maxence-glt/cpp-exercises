@@ -3,25 +3,20 @@
 #include "my_unordered_map.hpp"
 #include "my_unique_ptr.hpp"
 #include "my_vector.hpp"
-
-int f(int a) {
-    return a;
-}
-
-double g(int a) {
-    return a;
-}
+#include <unistd.h>
+#include <pthread.h>
 
 int main() {
     My::unordered_map<int, int> m;
-    m.insert({3, 67});
-    m.insert({5, 7});
-    m.insert({6, 7});
+    m[3] = 33;
+    m[9] = 3;
+    m[91] = 3;
+    m[19] = 3;
 
-    std::cout << m[3] << '\n';
-    std::cout << m[1] << '\n';
-    m[1] = 454;
-    std::cout << m[1] << '\n';
+    std::cout << m.toString();
+
+
+    My::unordered_map<int, int> m2(m);
 
     return 0;
 }

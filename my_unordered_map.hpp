@@ -4,6 +4,7 @@
 #include <bits/stdc++.h>
 #include <functional>
 #include <memory>
+#include <string>
 
 namespace My {
 
@@ -147,8 +148,15 @@ public:
                   const Allocator& alloc)
         : unordered_map(first, last, bucket_count, hash, key_equal(), alloc) {}
 
-    // TODO: Destructor
+    // Copy constructor
+    unordered_map(const unordered_map &other) 
+        : unordered_map(other, std::allocator_traits<allocator_type>::select_on_container_copy_construction(other.get_allocator())) {};
+    unordered_map(const unordered_map &other, const Allocator &alloc);
+
+    // TODO: Destructor looks good but need to check
     ~unordered_map() = default;
+
+    allocator_type get_allocator() const noexcept { return _allocator; }
 
     /*** Lookup ***/
     T& at(const Key& key) {
@@ -160,26 +168,56 @@ public:
     T& operator[](Key&& key) { return subscriptHelper(std::move(key)); }
 
     /*** Modifiers ***/
-    std::pair<iterator, bool> insert(const value_type& value) {
-        if (size()+1 > bucket_count()*max_load_factor()) {
-            int newBucketCount = nextPrime(bucket_count());
-            rehash(newBucketCount);
-        }
+    void clear() noexcept {
+        _buckets = std::make_unique<std::list<value_type>[]>(default_resize);
+        _bucket_count = default_resize;
+        _size = 0;
+    }
 
-        auto key = _hash_function(value.first);
-        auto index = key % bucket_count();
-        
-        for (auto &node : _buckets[index])
-            if (node.first == key) 
-                return std::pair{&node, false};
+    std::pair<iterator, bool> insert(const value_type &x) {
+        return emplace_unique(std::forward<value_type>(x));
+    }
 
-        _buckets[index].push_front(value);
-        ++_size;
-        return {&_buckets[index].front(), true};
+    std::pair<iterator, bool> insert(value_type &&x) {
+        return emplace_unique(std::move(x));
+    }
+
+    template <class P, std::__enable_if_t<std::is_constructible<value_type, P>::value, int> = 0>
+    std::pair<iterator, bool> insert(P &&x) {
+        return emplace_unique(std::forward<P>(x));
+    }
+
+    // I ignore the const_iterator portion due to the non homogeneous linked list backing array
+    iterator insert(const_iterator, const value_type &x) { return insert(x).first; }
+    iterator insert(const_iterator, value_type &&x) { return emplace_unique(std::move(x)).first; }
+
+    template <class P, std::__enable_if_t<std::is_constructible<value_type, P>::value, int> = 0>
+    iterator insert(const_iterator, P &&x) {
+        return insert(std::forward<P>(x)).first;
     }
 
     template<class InputIt>
-    void insert(InputIt first, InputIt last);
+    void insert(InputIt first, InputIt last) {
+        for (; first != last; ++first)
+            emplace_unique(*first);
+    }
+
+    void insert(std::initializer_list<value_type> ilist) {
+        insert(ilist.begin(), ilist.end());
+    }
+
+    template <class... _Args>
+    std::pair<iterator, bool> emplace(_Args&&... __args) {
+        return emplace_unique(std::forward<_Args>(__args)...);
+    }
+
+    iterator erase(const_iterator pos) {
+        auto index = _hash_function(pos) % bucket_count();
+    }
+
+    iterator erase(const_iterator first, const_iterator last);
+    size_type erase(const key_type& key);
+
 
     /*** Capacity ***/
     bool empty()         const noexcept { return !_size; }
@@ -199,6 +237,24 @@ public:
     void max_load_factor(float ml) { _max_load_factor = max_load_factor(); } ;
     void rehash(size_type count);
     
+    // not defined in STL
+    std::string toString() {
+        std::string out;
+        size_type idx = 0;
+
+        for (; idx < _bucket_count; ++idx) {
+            out += std::to_string(idx) + " : ";
+            for (const auto &kv : _buckets[idx])
+                out += std::to_string(kv.first) 
+                    + "-" 
+                    + std::to_string(kv.second) 
+                    + (&kv != &_buckets[idx].back() ? ", " : " ");
+
+            out.back() = '\n';
+        }
+
+        return out;
+    }
 
 private:
 /* If you examine the LLVM Clang++ 21 unordered_map implementation you find
@@ -225,14 +281,20 @@ private:
     float                                    _max_load_factor;
     hasher                                   _hash_function;
     key_equal                                _key_eq;
+    allocator_type                           _allocator;
 
     /*** Private helpers ***/
-    T& subscriptHelper(Key &&key) {
+    T& subscriptHelper(key_type &&key) {
+        if (!_bucket_count) {
+            int newBucketCount = nextPrime(bucket_count());
+            rehash(newBucketCount);
+        }
+
         auto index = _hash_function(key) % bucket_count();
 
         for (auto &node : _buckets[index])
-        if (_key_eq(node.first, key))
-            return node.second;
+            if (_key_eq(node.first, key))
+                return node.second;
 
         if (size()+1 > bucket_count()*max_load_factor()) {
             int newBucketCount = nextPrime(bucket_count());
@@ -244,6 +306,24 @@ private:
         _buckets[index].push_front(value_type{key, T{}});
         ++_size;
         return _buckets[index].front().second;
+    }
+
+    std::pair<iterator, bool> emplace_unique(value_type &&x) {
+        if (size()+1 > bucket_count()*max_load_factor()) {
+            int newBucketCount = nextPrime(bucket_count());
+            rehash(newBucketCount);
+        }
+
+        auto key = _hash_function(x.first);
+        auto index = key % bucket_count();
+        
+        for (auto &node : _buckets[index])
+            if (_key_eq(node.first, key)) 
+                return std::pair{&node, false};
+
+        _buckets[index].push_front(x);
+        ++_size;
+        return {&_buckets[index].front(), true};
     }
 };
 
@@ -262,7 +342,7 @@ unordered_map<Key, T, Hash, KeyEqual, Allocator>
                 const key_equal &equal, 
                 const Allocator &alloc)
 : _buckets(nullptr), _bucket_count(0), _size(0), _max_load_factor(1.f),
-    _hash_function(hash), _key_eq(equal)
+    _hash_function(hash), _key_eq(equal), _allocator(alloc)
 {/* Empty ctor */}
 
 
@@ -270,7 +350,7 @@ template <typename Key, typename T, typename Hash, typename KeyEqual, typename A
 unordered_map<Key, T, Hash, KeyEqual, Allocator>
 ::unordered_map(const Allocator& alloc)
 : _buckets(nullptr), _bucket_count(0), _size(0), _max_load_factor(1.f),
-    _hash_function(hasher{}), _key_eq(key_equal{})
+    _hash_function(hasher{}), _key_eq(key_equal{}), _allocator(alloc)
 {/* Empty ctor */}
 
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
@@ -282,8 +362,23 @@ unordered_map<Key, T, Hash, KeyEqual, Allocator>
                 const key_equal& equal,
                 const Allocator& alloc)
 : _buckets(nullptr), _bucket_count(0), _size(0), _max_load_factor(1.f),
-    _hash_function(hash), _key_eq(equal)
+    _hash_function(hash), _key_eq(equal), _allocator(alloc)
 { insert(first, last); }
+
+template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
+unordered_map<Key, T, Hash, KeyEqual, Allocator>
+::unordered_map(const unordered_map &other, const Allocator &alloc)
+: _allocator(alloc)
+{
+    _buckets = std::make_unique<std::list<value_type>[]>(other._bucket_count);
+    _bucket_count = other._bucket_count;
+    _size = other.size();
+    _max_load_factor = other.max_load_factor();
+    _key_eq = other._key_eq;
+
+    for (int i = 0; i < _bucket_count; ++i)
+        _buckets[i] = other._buckets[i];
+}
 
 /*** Lookup ***/
 template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
@@ -296,13 +391,6 @@ const T& unordered_map<Key, T, Hash, KeyEqual, Allocator>::at(const Key &key) co
             return node.second;
 
     throw(std::out_of_range("No key found"));
-}
-
-template <typename Key, typename T, typename Hash, typename KeyEqual, typename Allocator>
-template<class InputIt>
-void unordered_map<Key, T, Hash, KeyEqual, Allocator>
-::insert(InputIt first, InputIt last) {
-    const difference_type numOfElems = std::distance(first, last);
 }
 
 /*** Hash policy ***/

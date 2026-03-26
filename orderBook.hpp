@@ -40,9 +40,9 @@ private:
 public:
     void addOrder(Order o) {
         if (o.side == Side::Bid) 
-            addFromSide(bids, asks, [](Price a, Price b) -> bool { return a <= b; }, o);
+            addFromSide(bids, asks, [](Price a, Price b)->bool { return a <= b; }, o);
         else
-            addFromSide(asks, bids, [](Price a, Price b) -> bool { return a >= b; }, o);
+            addFromSide(asks, bids, [](Price a, Price b)->bool { return a >= b; }, o);
     }
 
     Price getBestBid() { return getBest(Side::Bid); }
